@@ -84,11 +84,12 @@ export const getPersonaMessage = (personaId, ingredients) => {
   }
 };
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://141.164.35.214:8002';
+// Use Vercel API proxy for HTTPS
+const API_URL = '/api';
 
 export const searchRecipes = async (ingredients, personaId) => {
   try {
-    const response = await fetch(`${API_URL}/recommend/mode`, {
+    const response = await fetch(`${API_URL}/recommend`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
