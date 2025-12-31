@@ -16,10 +16,22 @@ const AppPage = ({ onBack }) => {
   const { t, language, toggleLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
 
-  // 카테고리 변경시 자동 검색
+  // 초기 마운트 + 카테고리 변경시 자동 검색
   useEffect(() => {
-    handleSearch();
-  }, [selectedCategory]);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const data = await searchByCategory(selectedCategory.id, ingredients, selectedPersona.id);
+        console.log('API Response:', data);
+        setResult(data);
+      } catch (error) {
+        console.error('Search error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [selectedCategory.id]);
 
   const handleAddIngredient = (e) => {
     if (e.key === 'Enter' && inputValue.trim()) {
