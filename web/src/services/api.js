@@ -175,3 +175,17 @@ const getCategoryEmoji = (category) => {
   };
   return emojiMap[category] || '🍽️';
 };
+
+// 레시피 상세 정보 조회
+export const getRecipeDetail = async (recipeName) => {
+  try {
+    const response = await fetch(`${API_URL}/recipe/${encodeURIComponent(recipeName)}`);
+    if (!response.ok) {
+      throw new Error('Recipe not found');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Recipe detail error:', error);
+    return null;
+  }
+};

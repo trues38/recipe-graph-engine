@@ -409,6 +409,18 @@ async def autocomplete_ingredients(
     return {"ingredients": results}
 
 
+@app.get("/recipes/{recipe_name}")
+async def get_recipe_detail(recipe_name: str):
+    """레시피 상세 정보 조회"""
+    if not state.query_engine:
+        raise HTTPException(status_code=503, detail="Service not ready")
+
+    detail = await state.query_engine.get_recipe_detail(recipe_name)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return detail
+
+
 @app.get("/recipes/{recipe_name}/missing")
 async def get_missing_ingredients(
     recipe_name: str,

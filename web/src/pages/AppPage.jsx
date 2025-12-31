@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ArrowLeft, Plus, X, ChefHat, Sparkles, Clock, Flame, Info, Globe, Moon, Sun } from 'lucide-react';
+import { Search, ArrowLeft, Plus, X, ChefHat, Sparkles, Clock, Flame, Info, Globe, Moon, Sun, ExternalLink, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PERSONAS, CATEGORIES, searchByCategory } from '../services/api';
+import { PERSONAS, CATEGORIES, searchByCategory, getRecipeDetail } from '../services/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -12,9 +12,22 @@ const AppPage = ({ onBack }) => {
   const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [recipeLoading, setRecipeLoading] = useState(false);
 
   const { t, language, toggleLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
+
+  const handleRecipeClick = async (recipeName) => {
+    setRecipeLoading(true);
+    const detail = await getRecipeDetail(recipeName);
+    setSelectedRecipe(detail);
+    setRecipeLoading(false);
+  };
+
+  const closeRecipeModal = () => {
+    setSelectedRecipe(null);
+  };
 
   // 초기 마운트 + 카테고리 변경시 자동 검색
   useEffect(() => {
@@ -34,6 +47,9 @@ const AppPage = ({ onBack }) => {
   }, [selectedCategory.id]);
 
   const handleAddIngredient = (e) => {
+    // IME 조합 중이면 무시 (한글 입력 중복 방지)
+    if (e.nativeEvent.isComposing) return;
+
     if (e.key === 'Enter' && inputValue.trim()) {
       setIngredients([...ingredients, inputValue.trim()]);
       setInputValue('');
@@ -185,7 +201,11 @@ const AppPage = ({ onBack }) => {
                 {/* Recipe Grid */}
                 <div className="grid md:grid-cols-2 gap-6">
                   {result.recipes.map(recipe => (
-                    <div key={recipe.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden hover:shadow-md dark:hover:shadow-slate-700/50 transition-all group">
+                    <div
+                      key={recipe.id}
+                      onClick={() => handleRecipeClick(recipe.name)}
+                      className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden hover:shadow-md dark:hover:shadow-slate-700/50 transition-all group cursor-pointer"
+                    >
                       <div className="h-32 bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-5xl relative">
                          {recipe.image}
                          {recipe.matchedCount > 0 && (
@@ -235,6 +255,147 @@ const AppPage = ({ onBack }) => {
 
         </div>
       </main>
+
+      {/* Recipe Detail Modal */}
+      <AnimatePresence>
+        {(selectedRecipe || recipeLoading) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={closeRecipeModal}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {recipeLoading ? (
+                <div className="p-12 text-center">
+                  <Sparkles className="animate-spin mx-auto mb-4 text-brand-500" size={32} />
+                  <p className="text-slate-500 dark:text-slate-400">레시피 정보를 불러오는 중...</p>
+                </div>
+              ) : selectedRecipe ? (
+                <>
+                  <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wide">
+                          {selectedRecipe.category || '레시피'}
+                        </span>
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+                          {selectedRecipe.name}
+                        </h2>
+                      </div>
+                      <button
+                        onClick={closeRecipeModal}
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      >
+                        <X size={20} className="text-slate-500" />
+                      </button>
+                    </div>
+
+                    <div className="flex gap-4 mt-4 text-sm text-slate-500 dark:text-slate-400">
+                      {selectedRecipe.cooking_time > 0 && (
+                        <div className="flex items-center gap-1">
+                          <Clock size={16} />
+                          <span>{selectedRecipe.cooking_time}분</span>
+                        </div>
+                      )}
+                      {selectedRecipe.difficulty && (
+                        <div className="flex items-center gap-1">
+                          <Flame size={16} />
+                          <span>{selectedRecipe.difficulty}</span>
+                        </div>
+                      )}
+                      {selectedRecipe.servings > 0 && (
+                        <div className="flex items-center gap-1">
+                          <Users size={16} />
+                          <span>{selectedRecipe.servings}인분</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-6 space-y-6">
+                    {/* 재료 목록 */}
+                    {selectedRecipe.ingredients && selectedRecipe.ingredients.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">재료</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedRecipe.ingredients.map((ing, i) => (
+                            <span
+                              key={i}
+                              className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                                ingredients.includes(ing)
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              {ingredients.includes(ing) && '✓ '}{ing}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 설명 */}
+                    {selectedRecipe.description && (
+                      <div>
+                        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">설명</h3>
+                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                          {selectedRecipe.description}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* 조리 순서 */}
+                    {selectedRecipe.steps && selectedRecipe.steps.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">조리 순서</h3>
+                        <ol className="space-y-3">
+                          {selectedRecipe.steps.map((step, i) => (
+                            <li key={i} className="flex gap-3">
+                              <span className="flex-shrink-0 w-6 h-6 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-full flex items-center justify-center text-sm font-bold">
+                                {i + 1}
+                              </span>
+                              <span className="text-slate-600 dark:text-slate-300">{step}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* 팁 */}
+                    {selectedRecipe.tips && (
+                      <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl">
+                        <h3 className="font-semibold text-amber-800 dark:text-amber-300 mb-2">요리 팁</h3>
+                        <p className="text-amber-700 dark:text-amber-200 text-sm">{selectedRecipe.tips}</p>
+                      </div>
+                    )}
+
+                    {/* 원본 링크 */}
+                    {selectedRecipe.source_url && (
+                      <a
+                        href={selectedRecipe.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-brand-600 dark:text-brand-400 hover:underline"
+                      >
+                        <ExternalLink size={16} />
+                        <span>원본 레시피 보기</span>
+                      </a>
+                    )}
+                  </div>
+                </>
+              ) : null}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

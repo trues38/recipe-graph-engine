@@ -77,6 +77,34 @@ class QueryEngine:
         )
         return [RecipeResult(**r) for r in results]
 
+    async def get_recipe_detail(self, recipe_name: str) -> dict | None:
+        """레시피 상세 정보 조회 (재료 목록 포함)"""
+        query = """
+        MATCH (r:Recipe {name: $recipe_name})
+        OPTIONAL MATCH (r)-[:REQUIRED_FOR]-(i:Ingredient)
+        WITH r, collect(i.name) AS ingredients
+        RETURN r.name AS name,
+               r.category AS category,
+               r.cuisine AS cuisine,
+               r.time_minutes AS cooking_time,
+               r.difficulty AS difficulty,
+               r.total_calories AS calories,
+               r.total_protein AS protein,
+               r.description AS description,
+               r.steps AS steps,
+               r.tips AS tips,
+               r.servings AS servings,
+               r.source_url AS source_url,
+               ingredients
+        """
+        results = await self.client.execute_query(
+            query,
+            {"recipe_name": recipe_name},
+        )
+        if not results:
+            return None
+        return results[0]
+
     async def find_missing_ingredients(
         self,
         recipe_name: str,
