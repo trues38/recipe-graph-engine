@@ -224,28 +224,38 @@ async def recommend_by_category(request: CategoryRecommendRequest):
     if not state.query_engine or not state.persona_engine:
         raise HTTPException(status_code=503, detail="Service not ready")
 
-    # 카테고리 기반 쿼리 실행
+    # 카테고리 기반 쿼리 실행 (페르소나 필터 적용)
     recipes = await state.query_engine.find_by_category_v2(
         category_group=request.category,
         ingredients=request.ingredients,
+        persona=request.persona,
         limit=request.limit,
     )
 
-    # 페르소나 조회
-    persona = get_persona_by_name(request.persona)
-    if not persona:
-        persona = Persona.UMMA
+    # 페르소나별 메시지 생성
+    persona_greetings = {
+        "엄마밥": f"얘야, {request.category} 맛있는 거 골라봤어~",
+        "자취생": f"20분 안에 뚝딱! {request.category} 간단 레시피야",
+        "다이어트": f"저칼로리 {request.category} 추천이에요!",
+        "흑백요리사": f"오늘의 {request.category} 시그니처 메뉴입니다",
+        "건강맞춤": f"건강에 좋은 {request.category} 레시피에요",
+        "비건": f"채식 {request.category} 레시피입니다",
+    }
 
-    # 응답 메시지 생성
     if recipes:
+        trending_count = len([r for r in recipes if r.get("trending")])
         if request.ingredients:
             top_match = recipes[0].get("matched_count", 0)
             if top_match > 0:
-                message = f"{request.user_name}님, {request.category} 중에서 재료가 {top_match}개 맞는 레시피들이에요!"
+                message = f"{persona_greetings.get(request.persona, f'{request.category} 레시피에요!')} 재료 {top_match}개 매칭!"
             else:
-                message = f"{request.user_name}님, {request.category} 레시피들이에요. 재료를 더 입력하면 딱 맞는 걸 찾아드릴게요!"
+                message = persona_greetings.get(request.persona, f"{request.category} 레시피들이에요!")
         else:
-            message = f"{request.user_name}님, {request.category} 인기 레시피들이에요!"
+            base_msg = persona_greetings.get(request.persona, f"{request.category} 인기 레시피들이에요!")
+            if trending_count > 0:
+                message = f"{base_msg} 🔥 SNS 인기 {trending_count}개 포함"
+            else:
+                message = base_msg
     else:
         message = f"{request.category} 카테고리에 레시피가 없네요."
 
@@ -259,14 +269,18 @@ async def recommend_by_category(request: CategoryRecommendRequest):
                 "calories": r.get("calories"),
                 "matched_count": r.get("matched_count", 0),
                 "matched_ingredients": r.get("matched_ingredients", []),
-                "missing_ingredients": r.get("missing_ingredients", [])[:5],  # 최대 5개만
+                "missing_ingredients": r.get("missing_ingredients", [])[:5],
                 "total_ingredients": r.get("total_ingredients", 0),
+                "trending": r.get("trending", False),
+                "x_likes": r.get("x_likes", 0),
+                "x_tip": r.get("x_tip"),
             }
             for r in recipes
         ],
         "message": message,
         "category": request.category,
         "input_ingredients": request.ingredients,
+        "persona": request.persona,
     }
 
 

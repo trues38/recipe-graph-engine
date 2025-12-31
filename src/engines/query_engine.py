@@ -533,23 +533,51 @@ class QueryEngine:
         "간식": ["디저트", "간식", "떡", "빵", "음료"],
     }
 
+    # 페르소나별 필터 조건
+    PERSONA_FILTERS = {
+        "자취생": {"max_time": 20, "difficulty": ["쉬움"]},
+        "다이어트": {"max_calories": 500},
+        "흑백요리사": {"difficulty": ["어려움", "보통"]},
+        "건강맞춤": {},  # 별도 로직
+        "비건": {},  # 별도 로직
+        "엄마밥": {},  # 기본 - 필터 없음
+    }
+
     async def find_by_category_v2(
         self,
         category_group: str,
         ingredients: list[str] | None = None,
+        persona: str = "엄마밥",
         limit: int = 10,
     ) -> list[dict]:
-        """카테고리 기반 추천 (매칭 수 정렬, 항상 결과 반환)"""
+        """카테고리 기반 추천 (매칭 수 정렬, 트렌드 우선, 페르소나 필터)"""
         ingredients = ingredients or []
 
         # 카테고리 그룹 → 실제 카테고리들
         categories = self.CATEGORY_GROUPS.get(category_group, [category_group])
 
+        # 페르소나별 필터 조건
+        persona_filter = self.PERSONA_FILTERS.get(persona, {})
+        max_time = persona_filter.get("max_time")
+        max_calories = persona_filter.get("max_calories")
+        difficulties = persona_filter.get("difficulty")
+
+        # WHERE 조건 동적 생성
+        where_clauses = ["r.category IN $categories"]
+        if max_time:
+            where_clauses.append(f"(r.time_minutes IS NULL OR r.time_minutes <= {max_time})")
+        if max_calories:
+            where_clauses.append(f"(r.total_calories IS NULL OR r.total_calories <= {max_calories})")
+        if difficulties:
+            diff_list = ", ".join([f'"{d}"' for d in difficulties])
+            where_clauses.append(f"(r.difficulty IS NULL OR r.difficulty IN [{diff_list}])")
+
+        where_clause = " AND ".join(where_clauses)
+
         if ingredients:
-            # 재료가 있으면 매칭 수로 정렬
-            query = """
+            query = f"""
             MATCH (r:Recipe)
-            WHERE r.category IN $categories
+            WHERE {where_clause}
             OPTIONAL MATCH (r)-[:REQUIRED_FOR]-(i:Ingredient)
             WHERE i.name IN $ingredients
             WITH r,
@@ -568,15 +596,17 @@ class QueryEngine:
                    matched_count,
                    matched_ingredients,
                    missing_ingredients,
-                   size(all_ingredients) AS total_ingredients
-            ORDER BY matched_count DESC, r.name ASC
+                   size(all_ingredients) AS total_ingredients,
+                   coalesce(r.trending, false) AS trending,
+                   coalesce(r.x_likes, 0) AS x_likes,
+                   r.x_tip AS x_tip
+            ORDER BY r.trending DESC, matched_count DESC, r.x_likes DESC, r.name ASC
             LIMIT $limit
             """
         else:
-            # 재료 없으면 인기순 (레시피 이름순으로 대체)
-            query = """
+            query = f"""
             MATCH (r:Recipe)
-            WHERE r.category IN $categories
+            WHERE {where_clause}
             OPTIONAL MATCH (r)-[:REQUIRED_FOR]-(all_ing:Ingredient)
             WITH r, collect(DISTINCT all_ing.name) AS all_ingredients
             RETURN r.name AS name,
@@ -587,8 +617,11 @@ class QueryEngine:
                    0 AS matched_count,
                    [] AS matched_ingredients,
                    all_ingredients AS missing_ingredients,
-                   size(all_ingredients) AS total_ingredients
-            ORDER BY r.name ASC
+                   size(all_ingredients) AS total_ingredients,
+                   coalesce(r.trending, false) AS trending,
+                   coalesce(r.x_likes, 0) AS x_likes,
+                   r.x_tip AS x_tip
+            ORDER BY r.trending DESC, r.x_likes DESC, r.name ASC
             LIMIT $limit
             """
 

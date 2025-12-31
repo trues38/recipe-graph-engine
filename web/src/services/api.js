@@ -129,10 +129,14 @@ export const searchByCategory = async (category, ingredients = [], personaId = '
         matchedIngredients: r.matched_ingredients || [],
         missingIngredients: r.missing_ingredients || [],
         totalIngredients: r.total_ingredients || 0,
-        image: getCategoryEmoji(r.category)
+        image: getCategoryEmoji(r.category),
+        trending: r.trending || false,
+        xLikes: r.x_likes || 0,
+        xTip: r.x_tip || null
       })),
       category: data.category,
-      inputIngredients: data.input_ingredients
+      inputIngredients: data.input_ingredients,
+      persona: data.persona
     };
   } catch (error) {
     console.error('API error:', error);

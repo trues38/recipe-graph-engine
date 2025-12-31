@@ -14,6 +14,7 @@ const AppPage = ({ onBack }) => {
   const [result, setResult] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [recipeLoading, setRecipeLoading] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
 
   const { t, language, toggleLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
@@ -48,12 +49,20 @@ const AppPage = ({ onBack }) => {
 
   const handleAddIngredient = (e) => {
     // IME 조합 중이면 무시 (한글 입력 중복 방지)
-    if (e.nativeEvent.isComposing) return;
+    if (e.nativeEvent.isComposing || isComposing) return;
 
     if (e.key === 'Enter' && inputValue.trim()) {
+      e.preventDefault();
       setIngredients([...ingredients, inputValue.trim()]);
       setInputValue('');
     }
+  };
+
+  const handleCompositionStart = () => setIsComposing(true);
+  const handleCompositionEnd = (e) => {
+    setIsComposing(false);
+    // 조합 완료 후 값 업데이트
+    setInputValue(e.target.value);
   };
 
   const removeIngredient = (index) => {
@@ -160,6 +169,8 @@ const AppPage = ({ onBack }) => {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleAddIngredient}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
                 placeholder={t('app.input.placeholder')}
                 className="bg-transparent outline-none text-sm min-w-[120px] placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-white"
               />
@@ -208,6 +219,11 @@ const AppPage = ({ onBack }) => {
                     >
                       <div className="h-32 bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-5xl relative">
                          {recipe.image}
+                         {recipe.trending && (
+                           <div className="absolute top-3 left-3 bg-gradient-to-r from-orange-500 to-red-500 text-white px-2 py-1 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1">
+                             <Flame size={12} /> SNS 인기
+                           </div>
+                         )}
                          {recipe.matchedCount > 0 && (
                            <div className="absolute top-3 right-3 bg-green-500 text-white px-2 py-1 rounded-lg text-xs font-bold shadow-sm">
                              {recipe.matchedCount}개 매칭
