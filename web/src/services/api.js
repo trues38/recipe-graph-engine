@@ -189,7 +189,29 @@ export const getRecipeDetail = async (recipeName) => {
     }
     return await response.json();
   } catch (error) {
-    console.error('Recipe detail error:', error);
     return null;
+  }
+};
+
+// 채팅 API 호출
+export const sendChat = async (message) => {
+  try {
+    const response = await fetch(`${API_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: message,
+        user_name: 'User' 
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Chat API failed');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Chat error:', error);
+    throw error;
   }
 };

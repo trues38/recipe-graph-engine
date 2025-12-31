@@ -1,8 +1,12 @@
 """FastAPI 메인 앱"""
 
+import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from src.utils.neo4j_client import Neo4jClient
@@ -11,6 +15,7 @@ from src.engines.persona_engine import (
     PersonaEngine, Persona, PERSONAS,
     get_all_personas, get_persona_by_name, get_personas_by_tier
 )
+from src.api.chat import ChatRequest, ChatResponse, process_chat
 
 
 # ============== 앱 상태 ==============
@@ -131,6 +136,12 @@ class CategoryRecommendRequest(BaseModel):
 async def root():
     """API 상태 확인"""
     return {"status": "ok", "message": "Recipe Graph Engine API"}
+
+
+@app.get("/health")
+async def health():
+    """헬스체크"""
+    return {"status": "healthy"}
 
 
 @app.get("/stats")
@@ -680,3 +691,41 @@ async def recommend_by_mode(request: ModeRecommendRequest):
         ],
         message=message,
     )
+
+
+# ============== 채팅 API ==============
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    자연어 채팅 기반 레시피 추천
+
+    사용자 메시지에서 재료를 자동 추출하고
+    매칭되는 레시피 + 영양정보를 반환합니다.
+
+    예시:
+    - "냉장고에 두부랑 파 있어"
+    - "감자, 양파, 당근으로 뭐 만들지"
+    - "오늘 저녁 간단하게 뭐 먹을까"
+    """
+    return await process_chat(request)
+
+
+# ============== 정적 파일 서빙 (웹 UI) ==============
+
+# 웹 UI 경로 설정
+WEB_DIR = Path(__file__).parent.parent.parent / "web" / "dist"
+
+if WEB_DIR.exists():
+    # 정적 파일 (JS, CSS, assets)
+    app.mount("/assets", StaticFiles(directory=WEB_DIR / "assets"), name="assets")
+
+    @app.get("/app")
+    @app.get("/app/{path:path}")
+    async def serve_spa(path: str = ""):
+        """SPA 라우팅 - /app 경로를 index.html로"""
+        if path:
+            file_path = WEB_DIR / path
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(file_path)
+        return FileResponse(WEB_DIR / "index.html")

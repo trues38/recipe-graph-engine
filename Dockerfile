@@ -11,6 +11,9 @@ COPY src/ ./src/
 COPY config/ ./config/
 COPY main.py .
 
+# Copy web UI
+COPY web/dist/ ./web/dist/
+
 # Expose port
 EXPOSE 8000
 

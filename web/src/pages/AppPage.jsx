@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PERSONAS, CATEGORIES, searchByCategory, getRecipeDetail } from '../services/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
+import ChatWidget from '../components/ChatWidget';
 
 const AppPage = ({ onBack }) => {
   const [ingredients, setIngredients] = useState([]);
@@ -412,6 +413,8 @@ const AppPage = ({ onBack }) => {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+      <ChatWidget />
     </div>
   );
 };
