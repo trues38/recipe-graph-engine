@@ -9,7 +9,7 @@ import httpx
 # OpenRouter 설정 (무료 모델)
 OPENROUTER_API_KEY = os.environ.get(
     "OPENROUTER_API_KEY",
-    "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"
+    "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"
 )
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 

@@ -53,7 +53,7 @@ JSON 배열로만 응답하세요. 다른 설명 없이 배열만 출력하세�
                 "Content-Type": "application/json",
             },
             json={
-                "model": "google/gemini-2.0-flash-001",
+                "model": "xiaomi/mimo-v2-flash:free",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 200,
                 "temperature": 0,
@@ -118,7 +118,7 @@ async def generate_chat_response(
                 "Content-Type": "application/json",
             },
             json={
-                "model": "google/gemini-2.0-flash-001",
+                "model": "xiaomi/mimo-v2-flash:free",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 300,
                 "temperature": 0.7,
