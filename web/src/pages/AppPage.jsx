@@ -413,7 +413,6 @@ const AppPage = ({ onBack }) => {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
       <ChatWidget />
     </div>
   );
