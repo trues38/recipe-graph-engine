@@ -116,6 +116,15 @@ class ModeRecommendRequest(BaseModel):
     max_minutes: int | None = None  # 간편식 시간
 
 
+class CategoryRecommendRequest(BaseModel):
+    """카테고리 기반 추천 요청 (신규)"""
+    category: str  # 국/찌개, 메인요리, 반찬, 밑반찬, 간식
+    ingredients: list[str] = []  # 선택, 빈 배열 가능
+    persona: str = "엄마밥"
+    user_name: str = "회원"
+    limit: int = 10
+
+
 # ============== 엔드포인트 ==============
 
 @app.get("/")
@@ -181,6 +190,84 @@ async def recommend(request: RecommendRequest):
         ],
         message=message,
     )
+
+
+@app.get("/categories")
+async def get_categories():
+    """
+    사용 가능한 카테고리 목록
+
+    - 국/찌개: 찌개, 국, 탕, 전골
+    - 메인요리: 볶음, 구이, 찜, 튀김, 면, 덮밥, 비빔밥
+    - 반찬: 무침, 조림, 나물, 샐러드, 전
+    - 밑반찬: 장아찌, 젓갈, 김치, 절임, 장류
+    - 간식: 디저트, 간식, 떡, 빵, 음료
+    """
+    if not state.query_engine:
+        raise HTTPException(status_code=503, detail="Service not ready")
+
+    categories = await state.query_engine.get_categories()
+    return {"categories": categories}
+
+
+@app.post("/recommend/category")
+async def recommend_by_category(request: CategoryRecommendRequest):
+    """
+    카테고리 기반 레시피 추천 (신규 로직)
+
+    - 카테고리 먼저 선택 (필수)
+    - 재료 입력할수록 좁혀지는 방식
+    - 매칭 수로 정렬 (커버리지 최소값 없음)
+    - 재료 없어도 해당 카테고리 레시피 반환
+    - 항상 결과 있음
+    """
+    if not state.query_engine or not state.persona_engine:
+        raise HTTPException(status_code=503, detail="Service not ready")
+
+    # 카테고리 기반 쿼리 실행
+    recipes = await state.query_engine.find_by_category_v2(
+        category_group=request.category,
+        ingredients=request.ingredients,
+        limit=request.limit,
+    )
+
+    # 페르소나 조회
+    persona = get_persona_by_name(request.persona)
+    if not persona:
+        persona = Persona.UMMA
+
+    # 응답 메시지 생성
+    if recipes:
+        if request.ingredients:
+            top_match = recipes[0].get("matched_count", 0)
+            if top_match > 0:
+                message = f"{request.user_name}님, {request.category} 중에서 재료가 {top_match}개 맞는 레시피들이에요!"
+            else:
+                message = f"{request.user_name}님, {request.category} 레시피들이에요. 재료를 더 입력하면 딱 맞는 걸 찾아드릴게요!"
+        else:
+            message = f"{request.user_name}님, {request.category} 인기 레시피들이에요!"
+    else:
+        message = f"{request.category} 카테고리에 레시피가 없네요."
+
+    return {
+        "recipes": [
+            {
+                "name": r.get("name"),
+                "category": r.get("category"),
+                "cooking_time": r.get("cooking_time"),
+                "difficulty": r.get("difficulty"),
+                "calories": r.get("calories"),
+                "matched_count": r.get("matched_count", 0),
+                "matched_ingredients": r.get("matched_ingredients", []),
+                "missing_ingredients": r.get("missing_ingredients", [])[:5],  # 최대 5개만
+                "total_ingredients": r.get("total_ingredients", 0),
+            }
+            for r in recipes
+        ],
+        "message": message,
+        "category": request.category,
+        "input_ingredients": request.ingredients,
+    }
 
 
 @app.post("/recommend/health", response_model=RecommendResponse)

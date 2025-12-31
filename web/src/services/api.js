@@ -87,14 +87,25 @@ export const getPersonaMessage = (personaId, ingredients) => {
 // Use Vercel API proxy for HTTPS
 const API_URL = '/api';
 
-export const searchRecipes = async (ingredients, personaId) => {
+// 카테고리 목록
+export const CATEGORIES = [
+  { id: "국/찌개", name: "국/찌개", icon: "🍲" },
+  { id: "메인요리", name: "메인요리", icon: "🍖" },
+  { id: "반찬", name: "반찬", icon: "🥗" },
+  { id: "밑반찬", name: "밑반찬", icon: "🫙" },
+  { id: "간식", name: "간식", icon: "🍰" },
+];
+
+// 카테고리 기반 레시피 검색 (신규)
+export const searchByCategory = async (category, ingredients = [], personaId = 'UMMA') => {
   try {
-    const response = await fetch(`${API_URL}/recommend`, {
+    const response = await fetch(`${API_URL}/recommend-category`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mode: getModeName(personaId),
+        category: category,
         ingredients: ingredients,
+        persona: getModeName(personaId),
         limit: 10
       })
     });
@@ -106,28 +117,38 @@ export const searchRecipes = async (ingredients, personaId) => {
     const data = await response.json();
 
     return {
-      message: data.message || getPersonaMessage(personaId, ingredients),
+      message: data.message,
       recipes: data.recipes.map(r => ({
         id: r.name,
         name: r.name,
-        category: r.category || 'Main',
-        time: r.time_minutes || 30,
-        difficulty: r.difficulty || 'Medium',
+        category: r.category || category,
+        time: r.cooking_time || 30,
+        difficulty: r.difficulty || '보통',
         calories: r.calories || 0,
-        protein: r.protein || 0,
-        match: r.coverage || 0,
-        missing: [],
+        matchedCount: r.matched_count || 0,
+        matchedIngredients: r.matched_ingredients || [],
+        missingIngredients: r.missing_ingredients || [],
+        totalIngredients: r.total_ingredients || 0,
         image: getCategoryEmoji(r.category)
-      }))
+      })),
+      category: data.category,
+      inputIngredients: data.input_ingredients
     };
   } catch (error) {
     console.error('API error:', error);
-    // Fallback to mock data
     return {
-      message: getPersonaMessage(personaId, ingredients),
-      recipes: MOCKED_RECIPES
+      message: `${category} 레시피를 불러오는 중 오류가 발생했어요.`,
+      recipes: [],
+      category: category,
+      inputIngredients: ingredients
     };
   }
+};
+
+// 기존 검색 (호환성 유지)
+export const searchRecipes = async (ingredients, personaId) => {
+  // 기본 카테고리로 검색
+  return searchByCategory("메인요리", ingredients, personaId);
 };
 
 const getModeName = (personaId) => {

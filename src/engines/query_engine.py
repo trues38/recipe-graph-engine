@@ -494,6 +494,96 @@ class QueryEngine:
         )
         return [RecipeResult(**r) for r in results]
 
+    # ============== 카테고리 기반 추천 (신규) ==============
+
+    # 카테고리 그룹 매핑
+    CATEGORY_GROUPS = {
+        "국/찌개": ["찌개", "국", "탕", "전골"],
+        "메인요리": ["볶음", "구이", "찜", "튀김", "면", "덮밥", "비빔밥"],
+        "반찬": ["무침", "조림", "나물", "샐러드", "전"],
+        "밑반찬": ["장아찌", "젓갈", "김치", "절임", "장류"],
+        "간식": ["디저트", "간식", "떡", "빵", "음료"],
+    }
+
+    async def find_by_category_v2(
+        self,
+        category_group: str,
+        ingredients: list[str] | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """카테고리 기반 추천 (매칭 수 정렬, 항상 결과 반환)"""
+        ingredients = ingredients or []
+
+        # 카테고리 그룹 → 실제 카테고리들
+        categories = self.CATEGORY_GROUPS.get(category_group, [category_group])
+
+        if ingredients:
+            # 재료가 있으면 매칭 수로 정렬
+            query = """
+            MATCH (r:Recipe)
+            WHERE r.category IN $categories
+            OPTIONAL MATCH (r)-[:REQUIRED_FOR]-(i:Ingredient)
+            WHERE i.name IN $ingredients
+            WITH r,
+                 collect(DISTINCT i.name) AS matched_ingredients,
+                 count(DISTINCT i) AS matched_count
+            OPTIONAL MATCH (r)-[:REQUIRED_FOR]-(all_ing:Ingredient)
+            WITH r, matched_ingredients, matched_count,
+                 collect(DISTINCT all_ing.name) AS all_ingredients
+            WITH r, matched_ingredients, matched_count, all_ingredients,
+                 [x IN all_ingredients WHERE NOT x IN matched_ingredients] AS missing_ingredients
+            RETURN r.name AS name,
+                   r.category AS category,
+                   r.cooking_time AS cooking_time,
+                   r.difficulty AS difficulty,
+                   r.calories AS calories,
+                   matched_count,
+                   matched_ingredients,
+                   missing_ingredients,
+                   size(all_ingredients) AS total_ingredients
+            ORDER BY matched_count DESC, r.name ASC
+            LIMIT $limit
+            """
+        else:
+            # 재료 없으면 인기순 (레시피 이름순으로 대체)
+            query = """
+            MATCH (r:Recipe)
+            WHERE r.category IN $categories
+            OPTIONAL MATCH (r)-[:REQUIRED_FOR]-(all_ing:Ingredient)
+            WITH r, collect(DISTINCT all_ing.name) AS all_ingredients
+            RETURN r.name AS name,
+                   r.category AS category,
+                   r.cooking_time AS cooking_time,
+                   r.difficulty AS difficulty,
+                   r.calories AS calories,
+                   0 AS matched_count,
+                   [] AS matched_ingredients,
+                   all_ingredients AS missing_ingredients,
+                   size(all_ingredients) AS total_ingredients
+            ORDER BY r.name ASC
+            LIMIT $limit
+            """
+
+        results = await self.client.execute_query(
+            query,
+            {
+                "categories": categories,
+                "ingredients": ingredients,
+                "limit": limit,
+            },
+        )
+        return results
+
+    async def get_categories(self) -> list[dict]:
+        """사용 가능한 카테고리 목록"""
+        return [
+            {"id": "국/찌개", "name": "국/찌개", "icon": "🍲", "subcategories": self.CATEGORY_GROUPS["국/찌개"]},
+            {"id": "메인요리", "name": "메인요리", "icon": "🍖", "subcategories": self.CATEGORY_GROUPS["메인요리"]},
+            {"id": "반찬", "name": "반찬", "icon": "🥗", "subcategories": self.CATEGORY_GROUPS["반찬"]},
+            {"id": "밑반찬", "name": "밑반찬", "icon": "🫙", "subcategories": self.CATEGORY_GROUPS["밑반찬"]},
+            {"id": "간식", "name": "간식", "icon": "🍰", "subcategories": self.CATEGORY_GROUPS["간식"]},
+        ]
+
     async def get_stats(self) -> dict:
         """전체 통계"""
         queries = {

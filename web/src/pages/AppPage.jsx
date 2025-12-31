@@ -1,19 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, ArrowLeft, Plus, X, ChefHat, Sparkles, Clock, Flame, Info, Globe, Moon, Sun } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PERSONAS, searchRecipes } from '../services/api';
+import { PERSONAS, CATEGORIES, searchByCategory } from '../services/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTheme } from '../contexts/ThemeContext';
 
 const AppPage = ({ onBack }) => {
-  const [ingredients, setIngredients] = useState(['Kimchi', 'Pork', 'Onion']);
+  const [ingredients, setIngredients] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [selectedPersona, setSelectedPersona] = useState(PERSONAS[0]);
+  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  
+
   const { t, language, toggleLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
+
+  // 카테고리 변경시 자동 검색
+  useEffect(() => {
+    handleSearch();
+  }, [selectedCategory]);
 
   const handleAddIngredient = (e) => {
     if (e.key === 'Enter' && inputValue.trim()) {
@@ -29,7 +35,7 @@ const AppPage = ({ onBack }) => {
   const handleSearch = async () => {
     setLoading(true);
     try {
-      const data = await searchRecipes(ingredients, selectedPersona.id);
+      const data = await searchByCategory(selectedCategory.id, ingredients, selectedPersona.id);
       setResult(data);
     } catch (error) {
       console.error(error);
@@ -91,9 +97,29 @@ const AppPage = ({ onBack }) => {
       <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         <div className="max-w-4xl mx-auto">
           
+          {/* Category Selector */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-4 mb-4 transition-colors duration-300">
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${
+                    selectedCategory.id === cat.id
+                      ? 'bg-brand-600 text-white shadow-lg'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                  }`}
+                >
+                  <span className="text-xl">{cat.icon}</span>
+                  <span className="font-medium">{cat.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Input Section */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 mb-8 transition-colors duration-300">
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">{t('app.input.title')}</h2>
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">재료 입력 (선택)</h2>
             <div className="flex flex-wrap gap-2 mb-4">
               {ingredients.map((ing, i) => (
                 <span key={i} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium">
@@ -114,15 +140,15 @@ const AppPage = ({ onBack }) => {
             <div className="flex justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-700">
                <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1">
                  <Info size={14} />
-                 <span>{t('app.input.hint')}</span>
+                 <span>재료를 입력하면 매칭되는 레시피가 상위에 표시됩니다</span>
                </div>
-               <button 
+               <button
                 onClick={handleSearch}
                 disabled={loading}
                 className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-xl font-medium shadow-lg shadow-brand-500/20 flex items-center gap-2 disabled:opacity-70 transition-all"
                >
                  {loading ? <Sparkles className="animate-spin" size={18} /> : <Search size={18} />}
-                 {loading ? t('app.btn.cooking') : t('app.btn.find')}
+                 {loading ? '검색 중...' : '레시피 찾기'}
                </button>
             </div>
           </div>
@@ -148,11 +174,13 @@ const AppPage = ({ onBack }) => {
                 <div className="grid md:grid-cols-2 gap-6">
                   {result.recipes.map(recipe => (
                     <div key={recipe.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden hover:shadow-md dark:hover:shadow-slate-700/50 transition-all group">
-                      <div className="h-48 bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-6xl relative">
+                      <div className="h-32 bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-5xl relative">
                          {recipe.image}
-                         <div className="absolute top-3 right-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur px-2 py-1 rounded-lg text-xs font-bold text-slate-800 dark:text-white shadow-sm">
-                           {recipe.match}% Match
-                         </div>
+                         {recipe.matchedCount > 0 && (
+                           <div className="absolute top-3 right-3 bg-green-500 text-white px-2 py-1 rounded-lg text-xs font-bold shadow-sm">
+                             {recipe.matchedCount}개 매칭
+                           </div>
+                         )}
                       </div>
                       <div className="p-5">
                         <div className="flex justify-between items-start mb-2">
@@ -161,19 +189,21 @@ const AppPage = ({ onBack }) => {
                             <h3 className="font-bold text-slate-900 dark:text-white text-lg group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{recipe.name}</h3>
                           </div>
                         </div>
-                        
-                        <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mb-4">
-                          <div className="flex items-center gap-1"><Clock size={14}/> {recipe.time}m</div>
-                          <div className="flex items-center gap-1"><Flame size={14}/> {recipe.calories} kcal</div>
+
+                        <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mb-3">
+                          <div className="flex items-center gap-1"><Clock size={14}/> {recipe.time || '?'}분</div>
+                          <div className="flex items-center gap-1">재료 {recipe.totalIngredients}개</div>
                         </div>
 
-                        {recipe.missing.length > 0 ? (
-                           <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg">
-                             <span className="font-medium text-slate-700 dark:text-slate-300">{t('app.missing')}</span> {recipe.missing.join(', ')}
-                           </div>
-                        ) : (
-                          <div className="text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-3 rounded-lg flex items-center gap-2">
-                             <Sparkles size={14} /> {t('app.all_ingredients')}
+                        {recipe.matchedIngredients && recipe.matchedIngredients.length > 0 && (
+                          <div className="text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg mb-2">
+                            <span className="font-medium">✓ 있는 재료:</span> {recipe.matchedIngredients.join(', ')}
+                          </div>
+                        )}
+
+                        {recipe.missingIngredients && recipe.missingIngredients.length > 0 && (
+                          <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 p-2 rounded-lg">
+                            <span className="font-medium text-slate-700 dark:text-slate-300">+ 필요:</span> {recipe.missingIngredients.slice(0, 3).join(', ')}{recipe.missingIngredients.length > 3 ? ` 외 ${recipe.missingIngredients.length - 3}개` : ''}
                           </div>
                         )}
                       </div>
