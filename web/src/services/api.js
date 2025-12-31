@@ -84,12 +84,72 @@ export const getPersonaMessage = (personaId, ingredients) => {
   }
 };
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://141.164.35.214:8002';
+
 export const searchRecipes = async (ingredients, personaId) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  return {
-    message: getPersonaMessage(personaId, ingredients),
-    recipes: MOCKED_RECIPES
+  try {
+    const response = await fetch(`${API_URL}/recommend/mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: getModeName(personaId),
+        ingredients: ingredients,
+        limit: 10
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('API request failed');
+    }
+
+    const data = await response.json();
+
+    return {
+      message: data.message || getPersonaMessage(personaId, ingredients),
+      recipes: data.recipes.map(r => ({
+        id: r.name,
+        name: r.name,
+        category: r.category || 'Main',
+        time: r.time_minutes || 30,
+        difficulty: r.difficulty || 'Medium',
+        calories: r.calories || 0,
+        protein: r.protein || 0,
+        match: r.coverage || 0,
+        missing: [],
+        image: getCategoryEmoji(r.category)
+      }))
+    };
+  } catch (error) {
+    console.error('API error:', error);
+    // Fallback to mock data
+    return {
+      message: getPersonaMessage(personaId, ingredients),
+      recipes: MOCKED_RECIPES
+    };
+  }
+};
+
+const getModeName = (personaId) => {
+  const modeMap = {
+    'UMMA': '엄마밥',
+    'QUICK': '자취생',
+    'DIET': '다이어트',
+    'CHEF': '흑백요리사',
+    'HEALTH': '건강맞춤',
+    'VEGAN': '비건'
   };
+  return modeMap[personaId] || '엄마밥';
+};
+
+const getCategoryEmoji = (category) => {
+  const emojiMap = {
+    '찌개': '🥘',
+    '볶음': '🍳',
+    '국': '🍲',
+    '밥': '🍚',
+    '면': '🍜',
+    '구이': '🍖',
+    '샐러드': '🥗'
+  };
+  return emojiMap[category] || '🍽️';
 };
