@@ -22,6 +22,7 @@ const ChatWidget = () => {
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [expandedRecipe, setExpandedRecipe] = useState(null); // 확장된 레시피
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -152,22 +153,70 @@ const ChatWidget = () => {
                     {/* Embedded Recipes Preview */}
                     {msg.recipes && msg.recipes.length > 0 && (
                       <div className="mt-3 space-y-2">
-                        {msg.recipes.slice(0, 3).map((recipe, rIdx) => (
+                        {msg.recipes.slice(0, 5).map((recipe, rIdx) => (
                           <div
                             key={rIdx}
-                            className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-600 flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                            className="bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-600 overflow-hidden"
                           >
-                            <div className="w-8 h-8 bg-brand-100 dark:bg-brand-900/30 text-brand-600 rounded-md flex items-center justify-center text-xs">
-                              🍳
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-xs truncate dark:text-slate-200">
-                                {recipe.name}
+                            {/* 레시피 헤더 (클릭 가능) */}
+                            <div
+                              className="p-2 flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                              onClick={() => setExpandedRecipe(expandedRecipe === `${idx}-${rIdx}` ? null : `${idx}-${rIdx}`)}
+                            >
+                              <div className="w-8 h-8 bg-brand-100 dark:bg-brand-900/30 text-brand-600 rounded-md flex items-center justify-center text-xs">
+                                🍳
                               </div>
-                              <div className="text-[10px] text-slate-500">
-                                {recipe.calories}kcal • {recipe.matched}개 매칭
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-xs truncate dark:text-slate-200">
+                                  {recipe.name}
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  {recipe.calories}kcal • {recipe.matched}개 매칭
+                                  {recipe.missing_ingredients?.length > 0 && (
+                                    <span className="text-amber-600 dark:text-amber-400"> • +{recipe.missing_ingredients.length}개 필요</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className={`text-slate-400 transition-transform ${expandedRecipe === `${idx}-${rIdx}` ? 'rotate-180' : ''}`}>
+                                ▼
                               </div>
                             </div>
+
+                            {/* 확장된 상세 정보 */}
+                            {expandedRecipe === `${idx}-${rIdx}` && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="px-2 pb-2 space-y-2"
+                              >
+                                {/* 있는 재료 */}
+                                {recipe.matched_ingredients?.length > 0 && (
+                                  <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded text-[11px]">
+                                    <span className="font-medium text-green-700 dark:text-green-300">✓ 있는 재료: </span>
+                                    <span className="text-green-600 dark:text-green-400">{recipe.matched_ingredients.join(', ')}</span>
+                                  </div>
+                                )}
+
+                                {/* 부족한 재료 */}
+                                {recipe.missing_ingredients?.length > 0 && (
+                                  <div className="bg-amber-50 dark:bg-amber-900/20 p-2 rounded text-[11px]">
+                                    <span className="font-medium text-amber-700 dark:text-amber-300">+ 필요한 재료: </span>
+                                    <span className="text-amber-600 dark:text-amber-400">
+                                      {recipe.missing_ingredients.slice(0, 5).join(', ')}
+                                      {recipe.missing_ingredients.length > 5 && ` 외 ${recipe.missing_ingredients.length - 5}개`}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* 추가 정보 */}
+                                <div className="flex gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                                  {recipe.time && <span>⏱️ {recipe.time}분</span>}
+                                  {recipe.difficulty && <span>📊 {recipe.difficulty}</span>}
+                                  {recipe.category && <span>📂 {recipe.category}</span>}
+                                </div>
+                              </motion.div>
+                            )}
                           </div>
                         ))}
                       </div>

@@ -160,8 +160,9 @@ async def query_recipes_by_ingredients(ingredients: list[str], limit: int = 5) -
                 MATCH (all_ing:Ingredient)-[:REQUIRED_FOR]->(r)
                 WITH r, matched_ings, collect(DISTINCT all_ing.name) AS all_ingredients
 
-                // 커버율 계산 (매칭/전체 * 100)
+                // 부족한 재료 계산 (전체 - 매칭)
                 WITH r, matched_ings, all_ingredients,
+                     [x IN all_ingredients WHERE NOT x IN matched_ings] AS missing_ings,
                      size(matched_ings) AS matched_count,
                      size(all_ingredients) AS total_count,
                      round(size(matched_ings) * 100.0 / size(all_ingredients)) AS coverage
@@ -176,6 +177,7 @@ async def query_recipes_by_ingredients(ingredients: list[str], limit: int = 5) -
                        r.calories AS recipe_cal,
                        matched_count AS matched,
                        matched_ings AS matched_ingredients,
+                       missing_ings AS missing_ingredients,
                        total_count AS total_ingredients,
                        coverage
                 ORDER BY coverage DESC, matched_count DESC
@@ -191,6 +193,7 @@ async def query_recipes_by_ingredients(ingredients: list[str], limit: int = 5) -
                     "difficulty": record["difficulty"],
                     "matched": record["matched"],
                     "matched_ingredients": record["matched_ingredients"],
+                    "missing_ingredients": record["missing_ingredients"],
                     "total_ingredients": record["total_ingredients"],
                     "coverage": record["coverage"],
                     "calories": record["recipe_cal"] or 0,
@@ -246,17 +249,70 @@ async def query_basic_recipes(limit: int = 5) -> list[dict]:
 
 # ============== 메인 채팅 함수 ==============
 
+async def query_recipe_detail(recipe_name: str) -> dict | None:
+    """레시피 상세 정보 조회"""
+    driver = AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+
+    try:
+        async with driver.session() as session:
+            result = await session.run("""
+                MATCH (r:Recipe)
+                WHERE r.name CONTAINS $name
+                OPTIONAL MATCH (i:Ingredient)-[rel:REQUIRED_FOR]->(r)
+                RETURN r.name AS name, r.category AS category,
+                       r.cooking_time AS time, r.difficulty AS difficulty,
+                       r.calories AS calories,
+                       collect({name: i.name, amount: rel.amount, unit: rel.unit}) AS ingredients
+                LIMIT 1
+            """, name=recipe_name)
+
+            record = await result.single()
+            if record:
+                return {
+                    "name": record["name"],
+                    "category": record["category"],
+                    "time": record["time"],
+                    "difficulty": record["difficulty"],
+                    "calories": record["calories"],
+                    "ingredients": record["ingredients"]
+                }
+            return None
+    finally:
+        await driver.close()
+
+
 async def process_chat(request: ChatRequest) -> ChatResponse:
     """채팅 메시지 처리"""
-    
+
     msg = request.message.strip()
-    
-    # 0. 로직 기반 처리 (기본 한국 요리 쿼리 등)
-    # 단순 키워드 매칭으로 "기본 쿼리" 감지
-    basic_keywords = ["기본", "추천해줘", "뭐 먹지", "한국요리", "인기"]
-    is_basic_query = any(k in msg for k in basic_keywords) and len(msg) < 20
-    
-    # 특정 문구 ("한국요리 기본")가 포함되면 무조건 기본 로직
+
+    # 0-1. 레시피 상세 요청 감지 ("동그랑땡 어떻게", "김치찌개 만드는 법")
+    recipe_keywords = ["어떻게", "만드는", "레시피", "만들", "조리법", "알려", "해"]
+    if any(kw in msg for kw in recipe_keywords):
+        # 메시지에서 레시피 이름 추출 시도 (모든 키워드 제거)
+        msg_clean = msg
+        for kw in recipe_keywords:
+            msg_clean = msg_clean.replace(kw, "")
+        msg_clean = msg_clean.replace("?", "").replace("줘", "").replace(" ", "").strip()
+
+        if len(msg_clean) >= 2:
+            recipe = await query_recipe_detail(msg_clean)
+            if recipe:
+                ing_list = ", ".join([i["name"] for i in recipe["ingredients"] if i["name"]])
+                reply = f"**{recipe['name']}** 레시피에요!\n\n"
+                reply += f"📂 카테고리: {recipe['category']}\n"
+                reply += f"⏱️ 조리시간: {recipe['time']}분\n"
+                reply += f"🔥 칼로리: {recipe['calories']}kcal\n"
+                reply += f"📝 재료: {ing_list}\n\n"
+                reply += "자세한 조리법이 필요하시면 말씀해주세요!"
+
+                return ChatResponse(
+                    reply=reply,
+                    recipes=[recipe],
+                    ingredients_detected=[]
+                )
+
+    # 0-2. 기본 한국 요리 추천
     if "한국요리 기본" in msg or "기본 요리" in msg:
         recipes = await query_basic_recipes()
         reply = "한국인이 가장 즐겨 먹는 기본 요리 100선 중 인기 레시피를 추천해드릴게요! 어떤게 끌리시나요?"

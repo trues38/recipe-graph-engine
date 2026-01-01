@@ -578,8 +578,9 @@ class QueryEngine:
             query = f"""
             MATCH (r:Recipe)
             WHERE {where_clause}
+            // 부분 일치로 재료 매칭 (두부 → 순두부, 연두부 등 포함)
             OPTIONAL MATCH (r)-[:REQUIRED_FOR]-(i:Ingredient)
-            WHERE i.name IN $ingredients
+            WHERE ANY(ing IN $ingredients WHERE toLower(i.name) CONTAINS toLower(ing))
             WITH r,
                  collect(DISTINCT i.name) AS matched_ingredients,
                  count(DISTINCT i) AS matched_count
