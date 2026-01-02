@@ -24,7 +24,7 @@ services:
       - neo4j_recipe_data:/data
       - neo4j_recipe_logs:/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      test: ["CMD-SHELL", "wget --spider --quiet http://localhost:7474 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -50,7 +50,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     depends_on:
       neo4j-recipe:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

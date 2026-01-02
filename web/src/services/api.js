@@ -99,7 +99,7 @@ export const CATEGORIES = [
 // 카테고리 기반 레시피 검색 (신규)
 export const searchByCategory = async (category, ingredients = [], personaId = 'UMMA') => {
   try {
-    const response = await fetch(`${API_URL}/recommend-category`, {
+    const response = await fetch(`${API_URL}/recommend/category`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
